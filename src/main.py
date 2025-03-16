@@ -1,6 +1,8 @@
 import json
 import logging
+
 import requests
+
 
 def get_labmda_ip() -> str:
     """
@@ -20,4 +22,4 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     l.info("Lambda IP: %s", get_labmda_ip())
 
-    return {"statusCode": 200, "body": json.dumps({"msg": "Hello from uv-sam-trivy-template!aaaaaaaaaaaaaaaaaaaaaaaaaaa"})}
+    return {"statusCode": 200, "body": json.dumps({"msg": "Hello from uv-sam-trivy-template!"})}
