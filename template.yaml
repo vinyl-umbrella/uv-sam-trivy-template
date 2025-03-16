@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: |
+  uv-sam-trivy-template Sample SAM Template
+
+Resources:
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      AccessLogSetting:
+        DestinationArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ApiGateway}/access"
+        Format: '{"requestId": "$context.requestId", "ip": "$context.identity.sourceIp", "requestTime": "$context.requestTime", "httpMethod": "$context.httpMethod", "resourcePath": "$context.resourcePath", "status": "$context.status", "protocol": "$context.protocol", "responseLength": "$context.responseLength", "error": "$context.error.message"}'
+      StageName: api
+      EndpointConfiguration:
+        Type: REGIONAL
+
+  SampleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Example Lambda function
+      Runtime: python3.13
+      MemorySize: 128
+      Timeout: 30
+      Architectures:
+        - arm64
+      CodeUri: ./src/
+      Handler: main.lambda_handler
+      LoggingConfig:
+        LogFormat: JSON
+      Tracing: Active
+      Environment:
+        Variables:
+          TZ: Asia/Tokyo
+      Events:
+        SampleApi:
+          Type: Api
+          Properties:
+            Path: /hello
+            Method: get
+            RestApiId: !Ref ApiGateway
