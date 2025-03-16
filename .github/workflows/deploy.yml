@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +41,10 @@ jobs:
       - name: Export requirements.txt
         run: |
           uv export -o src/requirements.txt --no-hashes
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: aws/sam-cicd/sample-python/.python-version
 
       - name: Setup aws-sam
         uses: aws-actions/setup-sam@v2
