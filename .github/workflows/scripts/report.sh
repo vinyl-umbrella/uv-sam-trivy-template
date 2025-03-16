@@ -13,17 +13,46 @@ report_result() {
   local output_var="$3"
   local content="$4"
 
-  echo "## $title" >> $GITHUB_STEP_SUMMARY
+  # デバッグ情報
+  echo "Processing report for: $title (status=$status)"
 
-  if [ "$status" -eq 0 ]; then
-    echo "✅ $title passed" >> $GITHUB_STEP_SUMMARY
-    echo "No issues found." >> $GITHUB_STEP_SUMMARY
-    echo "${output_var}=false" >> $GITHUB_OUTPUT
+  # GitHub Step Summaryへの書き込み (直接ファイルパスを使用)
+  if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+    echo "## $title" >> "$GITHUB_STEP_SUMMARY"
+    echo "" >> "$GITHUB_STEP_SUMMARY"
+
+    if [ "$status" -eq 0 ]; then
+      echo "✅ Passed" >> "$GITHUB_STEP_SUMMARY"
+      echo "" >> "$GITHUB_STEP_SUMMARY"
+      echo "No issues found." >> "$GITHUB_STEP_SUMMARY"
+    else
+      echo "❌ Failed" >> "$GITHUB_STEP_SUMMARY"
+      echo "" >> "$GITHUB_STEP_SUMMARY"
+      if [ -n "$content" ]; then
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        echo "$content" >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+      else
+        echo "Command failed with status code $status" >> "$GITHUB_STEP_SUMMARY"
+      fi
+    fi
+
+    echo "" >> "$GITHUB_STEP_SUMMARY"
+    echo "---" >> "$GITHUB_STEP_SUMMARY"
+    echo "" >> "$GITHUB_STEP_SUMMARY"
   else
-    echo "❌ $title failed" >> $GITHUB_STEP_SUMMARY
-    echo '```' >> $GITHUB_STEP_SUMMARY
-    echo "$content" >> $GITHUB_STEP_SUMMARY
-    echo '```' >> $GITHUB_STEP_SUMMARY
-    echo "${output_var}=true" >> $GITHUB_OUTPUT
+    echo "WARNING: GITHUB_STEP_SUMMARY is not set!"
+  fi
+
+  # GitHub Outputへの書き込み
+  if [ -n "$GITHUB_OUTPUT" ]; then
+    if [ "$status" -eq 0 ]; then
+      echo "${output_var}=false" >> "$GITHUB_OUTPUT"
+    else
+      echo "${output_var}=true" >> "$GITHUB_OUTPUT"
+    fi
+    echo "Output ${output_var}=${status} written to GITHUB_OUTPUT"
+  else
+    echo "WARNING: GITHUB_OUTPUT is not set!"
   fi
 }
