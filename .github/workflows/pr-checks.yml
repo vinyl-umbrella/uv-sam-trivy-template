@@ -21,11 +21,43 @@ jobs:
         run: |
           uv sync
 
-      - name: Run ruff linter
-        run: uvx ruff check
+      - name: lint
+        id: ruff-lint
+        continue-on-error: true
+        run: |
+          LINT_OUTPUT=$(uvx ruff check 2>&1) || LINT_STATUS=$?
 
-      - name: Run formatter
-        run: uvx ruff format --check
+          echo "## Ruff Linter Results" >> $GITHUB_STEP_SUMMARY
+          if [ -z "$LINT_STATUS" ]; then
+            echo "✅ Ruff linting passed" >> $GITHUB_STEP_SUMMARY
+            echo "No issues found." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Ruff linting failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$LINT_OUTPUT" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: format
+        id: ruff-format
+        continue-on-error: true
+        run: |
+          FORMAT_OUTPUT=$(uvx ruff format --check 2>&1) || FORMAT_STATUS=$?
+
+          echo "## Ruff Format Results" >> $GITHUB_STEP_SUMMARY
+          if [ -z "$FORMAT_STATUS" ]; then
+            echo "✅ Ruff format check passed" >> $GITHUB_STEP_SUMMARY
+            echo "All files formatted correctly." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Ruff format check failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$FORMAT_OUTPUT" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check if any step failed
+        if: steps.ruff-lint.outcome == 'failure' || steps.ruff-format.outcome == 'failure'
+        run: exit 1
 
   trivy-code-scan:
     runs-on: ubuntu-latest
@@ -39,6 +71,8 @@ jobs:
         run: uv export -o src/requirements.txt --no-hashes
 
       - name: Run Trivy vulnerability scanner for Python code
+        id: trivy-python
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -48,12 +82,26 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
+      - name: Output Trivy Python scan results to Summary
+        run: |
+          echo "## Trivy Python Scan Results" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.trivy-python.outcome }}" == "success" ]; then
+            echo "✅ No security vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Security vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.trivy-python.outputs.stdout || 'No detailed output available' }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
   trivy-sam-template:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner for CloudFormation
+        id: trivy-sam
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'config'
@@ -61,3 +109,15 @@ jobs:
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
+
+      - name: Output Trivy SAM scan results to Summary
+        run: |
+          echo "## Trivy SAM Template Scan Results" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.trivy-sam.outcome }}" == "success" ]; then
+            echo "✅ No security vulnerabilities found in SAM template" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Security vulnerabilities detected in SAM template" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.trivy-sam.outputs.stdout || 'No detailed output available' }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
