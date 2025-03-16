@@ -1,0 +1,132 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-format:
+    runs-on: ubuntu-latest
+    outputs:
+      lint_failed: ${{ steps.ruff-lint.outputs.lint_failed }}
+      format_failed: ${{ steps.ruff-format.outputs.format_failed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: lint
+        id: ruff-lint
+        continue-on-error: true
+        run: |
+          set +e
+          source .github/workflows/scripts/report.sh
+
+          LINT_OUTPUT=$(uvx ruff check 2>&1)
+          LINT_STATUS=$?
+
+          report_result "Ruff Linter Results" "$LINT_STATUS" "lint_failed" "$LINT_OUTPUT"
+
+      - name: format
+        id: ruff-format
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          source .github/workflows/scripts/report.sh
+
+          FORMAT_OUTPUT=$(uvx ruff format --check 2>&1)
+          FORMAT_STATUS=$?
+
+          report_result "Ruff Format Results" "$FORMAT_STATUS" "format_failed" "$FORMAT_OUTPUT"
+
+      - name: Check if any step failed
+        if: always()
+        run: |
+          if [[ "${{ steps.ruff-lint.outputs.lint_failed }}" == "true" || "${{ steps.ruff-format.outputs.format_failed }}" == "true" ]]; then
+            echo "::error::Linting or formatting checks failed"
+            exit 1
+          fi
+
+  trivy-code-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Export requirements.txt
+        run: uv export -o src/requirements.txt --no-hashes
+
+      - name: Run Trivy vulnerability scanner for Python code
+        id: trivy-python
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './src/'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - name: Output Trivy Python scan results to Summary
+        id: trivy-output
+        run: |
+          set +e
+          source .github/workflows/scripts/report.sh
+
+          if [ "${{ steps.trivy-python.outcome }}" == "success" ]; then
+            report_result "Trivy Python Scan Results" "0" "python_scan_failed" "No vulnerabilities found"
+          else
+            report_result "Trivy Python Scan Results" "1" "python_scan_failed" "${{ steps.trivy-python.outputs.stdout || 'No detailed output available' }}"
+          fi
+
+      - name: Check for Python code vulnerabilities
+        if: always()
+        run: |
+          if [[ "${{ steps.trivy-output.outputs.python_scan_failed }}" == "true" ]]; then
+            echo "::error::Trivy found security vulnerabilities in Python code"
+            exit 1
+          fi
+
+  trivy-sam-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner for CloudFormation
+        id: trivy-sam
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: './template.yaml'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Output Trivy SAM scan results to Summary
+        id: trivy-sam-output
+        run: |
+          set +e
+          source .github/workflows/scripts/report.sh
+
+          if [ "${{ steps.trivy-sam.outcome }}" == "success" ]; then
+            report_result "Trivy SAM Template Scan Results" "0" "sam_scan_failed" "No vulnerabilities found in SAM template"
+          else
+            report_result "Trivy SAM Template Scan Results" "1" "sam_scan_failed" "${{ steps.trivy-sam.outputs.stdout || 'No detailed output available' }}"
+          fi
+
+      - name: Check for SAM template vulnerabilities
+        if: always()
+        run: |
+          if [[ "${{ steps.trivy-sam-output.outputs.sam_scan_failed }}" == "true" ]]; then
+            echo "::error::Trivy found security vulnerabilities in SAM template"
+            exit 1
+          fi
