@@ -4,22 +4,17 @@ on:
   pull_request:
     branches: [ main ]
 
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   lint-and-format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: |
-          uv sync
+        run: uv sync
 
       - name: lint
         id: ruff-lint
@@ -31,11 +26,13 @@ jobs:
           if [ -z "$LINT_STATUS" ]; then
             echo "✅ Ruff linting passed" >> $GITHUB_STEP_SUMMARY
             echo "No issues found." >> $GITHUB_STEP_SUMMARY
+            echo "lint_failed=false" >> $GITHUB_OUTPUT
           else
             echo "❌ Ruff linting failed" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "$LINT_OUTPUT" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "lint_failed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: format
@@ -48,16 +45,20 @@ jobs:
           if [ -z "$FORMAT_STATUS" ]; then
             echo "✅ Ruff format check passed" >> $GITHUB_STEP_SUMMARY
             echo "All files formatted correctly." >> $GITHUB_STEP_SUMMARY
+            echo "format_failed=false" >> $GITHUB_OUTPUT
           else
             echo "❌ Ruff format check failed" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "$FORMAT_OUTPUT" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "format_failed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Check if any step failed
-        if: steps.ruff-lint.outcome == 'failure' || steps.ruff-format.outcome == 'failure'
-        run: exit 1
+        if: steps.ruff-lint.outputs.lint_failed == 'true' || steps.ruff-format.outputs.format_failed == 'true'
+        run: |
+          echo "::error::Linting or formatting checks failed"
+          exit 1
 
   trivy-code-scan:
     runs-on: ubuntu-latest
@@ -87,12 +88,20 @@ jobs:
           echo "## Trivy Python Scan Results" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.trivy-python.outcome }}" == "success" ]; then
             echo "✅ No security vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+            echo "python_scan_failed=false" >> $GITHUB_OUTPUT
           else
             echo "❌ Security vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "${{ steps.trivy-python.outputs.stdout || 'No detailed output available' }}" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "python_scan_failed=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Check for Python code vulnerabilities
+        if: steps.trivy-python.outcome == 'failure'
+        run: |
+          echo "::error::Trivy found security vulnerabilities in Python code"
+          exit 1
 
   trivy-sam-template:
     runs-on: ubuntu-latest
@@ -115,9 +124,17 @@ jobs:
           echo "## Trivy SAM Template Scan Results" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.trivy-sam.outcome }}" == "success" ]; then
             echo "✅ No security vulnerabilities found in SAM template" >> $GITHUB_STEP_SUMMARY
+            echo "sam_scan_failed=false" >> $GITHUB_OUTPUT
           else
             echo "❌ Security vulnerabilities detected in SAM template" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "${{ steps.trivy-sam.outputs.stdout || 'No detailed output available' }}" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "sam_scan_failed=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Check for SAM template vulnerabilities
+        if: steps.trivy-sam.outcome == 'failure'
+        run: |
+          echo "::error::Trivy found security vulnerabilities in SAM template"
+          exit 1
