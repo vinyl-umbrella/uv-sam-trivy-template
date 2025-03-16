@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version-file: aws/sam-cicd/sample-python/.python-version
+          python-version-file: .python-version
 
       - name: Setup aws-sam
         uses: aws-actions/setup-sam@v2
