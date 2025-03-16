@@ -1,2 +1,2 @@
-# In this repo, we don't set domain. So, we don't need to set domain for api gateway.
+# In this repo, we don't set domain. So, we don't need to define TLS policy for api gateway.
 AVD-AWS-0112
