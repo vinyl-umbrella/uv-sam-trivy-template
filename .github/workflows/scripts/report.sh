@@ -13,9 +13,6 @@ report_result() {
   local output_var="$3"
   local content="$4"
 
-  # デバッグ情報
-  echo "Processing report for: $title (status=$status)"
-
   # GitHub Step Summaryへの書き込み (直接ファイルパスを使用)
   if [ -n "$GITHUB_STEP_SUMMARY" ]; then
     echo "## $title" >> "$GITHUB_STEP_SUMMARY"

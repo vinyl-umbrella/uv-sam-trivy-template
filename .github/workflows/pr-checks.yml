@@ -24,15 +24,12 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          chmod +x .github/workflows/scripts/report.sh
           source .github/workflows/scripts/report.sh
 
           LINT_OUTPUT=$(uvx ruff check 2>&1)
           LINT_STATUS=$?
 
           report_result "Ruff Linter Results" "$LINT_STATUS" "lint_failed" "$LINT_OUTPUT"
-          echo "Lint status: $LINT_STATUS"
-          echo "Lint output variable: $(cat $GITHUB_OUTPUT | grep lint_failed)"
 
       - name: format
         id: ruff-format
@@ -46,15 +43,10 @@ jobs:
           FORMAT_STATUS=$?
 
           report_result "Ruff Format Results" "$FORMAT_STATUS" "format_failed" "$FORMAT_OUTPUT"
-          echo "Format status: $FORMAT_STATUS"
-          echo "Format output variable: $(cat $GITHUB_OUTPUT | grep format_failed)"
 
       - name: Check if any step failed
         if: always()
         run: |
-          echo "Lint failed: ${{ steps.ruff-lint.outputs.lint_failed }}"
-          echo "Format failed: ${{ steps.ruff-format.outputs.format_failed }}"
-
           if [[ "${{ steps.ruff-lint.outputs.lint_failed }}" == "true" || "${{ steps.ruff-format.outputs.format_failed }}" == "true" ]]; then
             echo "::error::Linting or formatting checks failed"
             exit 1
@@ -86,6 +78,7 @@ jobs:
       - name: Output Trivy Python scan results to Summary
         id: trivy-output
         run: |
+          set +e
           source .github/workflows/scripts/report.sh
 
           if [ "${{ steps.trivy-python.outcome }}" == "success" ]; then
@@ -97,8 +90,6 @@ jobs:
       - name: Check for Python code vulnerabilities
         if: always()
         run: |
-          echo "Python scan failed: ${{ steps.trivy-output.outputs.python_scan_failed }}"
-
           if [[ "${{ steps.trivy-output.outputs.python_scan_failed }}" == "true" ]]; then
             echo "::error::Trivy found security vulnerabilities in Python code"
             exit 1
@@ -123,6 +114,7 @@ jobs:
       - name: Output Trivy SAM scan results to Summary
         id: trivy-sam-output
         run: |
+          set +e
           source .github/workflows/scripts/report.sh
 
           if [ "${{ steps.trivy-sam.outcome }}" == "success" ]; then
@@ -134,8 +126,6 @@ jobs:
       - name: Check for SAM template vulnerabilities
         if: always()
         run: |
-          echo "SAM scan failed: ${{ steps.trivy-sam-output.outputs.sam_scan_failed }}"
-
           if [[ "${{ steps.trivy-sam-output.outputs.sam_scan_failed }}" == "true" ]]; then
             echo "::error::Trivy found security vulnerabilities in SAM template"
             exit 1
