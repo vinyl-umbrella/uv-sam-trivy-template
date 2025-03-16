@@ -1,0 +1,50 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate session name
+        id: session
+        run: |
+          repo="${GITHUB_REPOSITORY#${GITHUB_REPOSITORY_OWNER}/}"
+          echo "name=${repo}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.IAM_ROLE_ARN }}
+          role-session-name: ${{ steps.session.outputs.name }}
+
+      - name: Output step summary
+        env:
+          SESSION_NAME: ${{ steps.session.outputs.name }}
+          CLOUDTRAIL_URL: https://console.aws.amazon.com/cloudtrail/home#/events
+        run: |
+          echo "## Authorized on AWS" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- ${CLOUDTRAIL_URL}?Username=${SESSION_NAME}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Export requirements.txt
+        run: |
+          uv export -o src/requirements.txt --no-hashes
+
+      - name: Setup aws-sam
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Build & Deploy
+        run: |
+          sam build
+          sam deploy --s3-bucket ${{secrets.S3_BUCKET}} --no-confirm-changeset
