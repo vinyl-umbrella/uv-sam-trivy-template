@@ -60,16 +60,13 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Export requirements.txt
-        run: uv export -o src/requirements.txt --no-hashes
-
       - name: Run Trivy vulnerability scanner for Python code
         id: trivy-python
         continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: './src/'
+          scan-ref: './uv.lock'
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
